@@ -67,26 +67,6 @@ pipeline {
             }
         }
 
-        stage('Deploy to AKS - Update Image') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'azure-sp', 
-                                                  usernameVariable: 'AZURE_CLIENT_ID', 
-                                                  passwordVariable: 'AZURE_CLIENT_SECRET')]) {
-                    sh """
-                    # Ensure AKS auth
-                    az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $TENANT_ID
-                    az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER --overwrite-existing
-
-                    # Update image
-                    kubectl set image deployment/java-app-deployment \
-                        java-app=${FULL_IMAGE} \
-                        --namespace ${K8S_NAMESPACE}
-                    kubectl rollout status deployment/java-app-deployment --namespace ${K8S_NAMESPACE}
-                    """
-                }
-            }
-        }
-    }
 
     post {
         always {
