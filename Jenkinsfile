@@ -2,33 +2,54 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = 'rajcosivadevops/cicdncplimage'
-        DOCKER_TAG = 'latest'
+        ACR_NAME = "sowmiyaacr123"
+        IMAGE_NAME = "java-app"
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        FULL_IMAGE = "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${IMAGE_TAG}"
+        K8S_NAMESPACE = "default"
     }
 
     stages {
-       
-       
-        stage('Docker Login & Pull') {
+        stage('Checkout') {
             steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: 'dockerhublogin', 'passwordVariable': 'DOCKER_PASS', usernameVariable: 'DOCKER_USER')]) {
-                        sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
-                    }
-                    sh "docker pull ${DOCKER_IMAGE}:${DOCKER_TAG}"
-                }
+                git branch: 'main', url: 'https://github.com/sowmiyarajapandi/aks-jenkins-demo.git'
             }
         }
-     
-      
 
-        stage('Deploy Container') {
+        stage('Build') {
             steps {
-                script {
-                    sh "docker run -d -p 8081:9090 ${DOCKER_IMAGE}:${DOCKER_TAG}"
-
-                }
+                sh 'mvn clean package -DskipTests'
             }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh "docker build -t ${FULL_IMAGE} ."
+            }
+        }
+
+        stage('Push to ACR') {
+            steps {
+                sh "az acr login --name ${ACR_NAME}"
+                sh "docker push ${FULL_IMAGE}"
+            }
+        }
+
+        stage('Deploy to AKS') {
+            steps {
+                sh """
+                kubectl set image deployment/java-app-deployment \
+                java-app=${FULL_IMAGE} \
+                --namespace ${K8S_NAMESPACE}
+                """
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "Cleaning up Docker images on agent..."
+            sh 'docker system prune -f'
         }
     }
 }
