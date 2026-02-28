@@ -28,19 +28,38 @@ pipeline {
             }
         }
 
+        stage('Login to ACR') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'acr-credentials', 
+                                                  usernameVariable: 'ACR_USERNAME', 
+                                                  passwordVariable: 'ACR_PASSWORD')]) {
+                    sh "docker login ${ACR_NAME}.azurecr.io -u $ACR_USERNAME -p $ACR_PASSWORD"
+                }
+            }
+        }
+
         stage('Push to ACR') {
             steps {
-                sh "az acr login --name ${ACR_NAME}"
                 sh "docker push ${FULL_IMAGE}"
             }
         }
 
-        stage('Deploy to AKS') {
+        stage('Deploy to AKS - Initial') {
+            steps {
+                sh """
+                kubectl apply -f deployment.yaml --namespace ${K8S_NAMESPACE}
+                kubectl apply -f service.yaml --namespace ${K8S_NAMESPACE}
+                """
+            }
+        }
+
+        stage('Deploy to AKS - Update Image') {
             steps {
                 sh """
                 kubectl set image deployment/java-app-deployment \
                 java-app=${FULL_IMAGE} \
                 --namespace ${K8S_NAMESPACE}
+                kubectl rollout status deployment/java-app-deployment --namespace ${K8S_NAMESPACE}
                 """
             }
         }
