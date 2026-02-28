@@ -7,6 +7,9 @@ pipeline {
         IMAGE_TAG = "${env.BUILD_NUMBER}"
         FULL_IMAGE = "${ACR_NAME}.azurecr.io/${IMAGE_NAME}:${IMAGE_TAG}"
         K8S_NAMESPACE = "default"
+        RESOURCE_GROUP = "pipelineproject"
+        AKS_CLUSTER = "sowmiya-aks"
+        TENANT_ID = "98a4779e-cd18-4e1e-9c0f-99a7e7ea9e18"
     }
 
     stages {
@@ -46,21 +49,41 @@ pipeline {
 
         stage('Deploy to AKS - Initial') {
             steps {
-                sh """
-                kubectl apply -f deployment.yaml --namespace ${K8S_NAMESPACE}
-                kubectl apply -f service.yaml --namespace ${K8S_NAMESPACE}
-                """
+                withCredentials([usernamePassword(credentialsId: 'azure-sp', 
+                                                  usernameVariable: 'AZURE_CLIENT_ID', 
+                                                  passwordVariable: 'AZURE_CLIENT_SECRET')]) {
+                    sh """
+                    # Login to Azure
+                    az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $TENANT_ID
+
+                    # Get kubeconfig
+                    az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER --overwrite-existing
+
+                    # Deploy resources
+                    kubectl apply -f deployment.yaml --namespace ${K8S_NAMESPACE}
+                    kubectl apply -f service.yaml --namespace ${K8S_NAMESPACE}
+                    """
+                }
             }
         }
 
         stage('Deploy to AKS - Update Image') {
             steps {
-                sh """
-                kubectl set image deployment/java-app-deployment \
-                java-app=${FULL_IMAGE} \
-                --namespace ${K8S_NAMESPACE}
-                kubectl rollout status deployment/java-app-deployment --namespace ${K8S_NAMESPACE}
-                """
+                withCredentials([usernamePassword(credentialsId: 'azure-sp', 
+                                                  usernameVariable: 'AZURE_CLIENT_ID', 
+                                                  passwordVariable: 'AZURE_CLIENT_SECRET')]) {
+                    sh """
+                    # Ensure AKS auth
+                    az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $TENANT_ID
+                    az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER --overwrite-existing
+
+                    # Update image
+                    kubectl set image deployment/java-app-deployment \
+                        java-app=${FULL_IMAGE} \
+                        --namespace ${K8S_NAMESPACE}
+                    kubectl rollout status deployment/java-app-deployment --namespace ${K8S_NAMESPACE}
+                    """
+                }
             }
         }
     }
