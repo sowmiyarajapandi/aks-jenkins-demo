@@ -13,6 +13,7 @@ pipeline {
     }
 
     stages {
+
         stage('Checkout') {
             steps {
                 git branch: 'main', url: 'https://github.com/sowmiyarajapandi/aks-jenkins-demo.git'
@@ -33,9 +34,11 @@ pipeline {
 
         stage('Login to ACR') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'acr-credentials', 
-                                                  usernameVariable: 'ACR_USERNAME', 
-                                                  passwordVariable: 'ACR_PASSWORD')]) {
+                withCredentials([usernamePassword(
+                    credentialsId: 'acr-credentials',
+                    usernameVariable: 'ACR_USERNAME',
+                    passwordVariable: 'ACR_PASSWORD'
+                )]) {
                     sh "docker login ${ACR_NAME}.azurecr.io -u $ACR_USERNAME -p $ACR_PASSWORD"
                 }
             }
@@ -49,17 +52,14 @@ pipeline {
 
         stage('Deploy to AKS - Initial') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'azure-sp', 
-                                                  usernameVariable: 'AZURE_CLIENT_ID', 
-                                                  passwordVariable: 'AZURE_CLIENT_SECRET')]) {
+                withCredentials([usernamePassword(
+                    credentialsId: 'azure-sp',
+                    usernameVariable: 'AZURE_CLIENT_ID',
+                    passwordVariable: 'AZURE_CLIENT_SECRET'
+                )]) {
                     sh """
-                    # Login to Azure
                     az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $TENANT_ID
-
-                    # Get kubeconfig
                     az aks get-credentials --resource-group $RESOURCE_GROUP --name $AKS_CLUSTER --overwrite-existing
-
-                    # Deploy resources
                     kubectl apply -f deployment.yaml --namespace ${K8S_NAMESPACE}
                     kubectl apply -f service.yaml --namespace ${K8S_NAMESPACE}
                     """
@@ -67,6 +67,7 @@ pipeline {
             }
         }
 
+    }   // ✅ THIS WAS MISSING — closes stages block
 
     post {
         always {
